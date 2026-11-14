@@ -269,10 +269,25 @@ COMPRESSION
         color data must be in the RGB components of the input image and
         alpha data must be in the A component.
 
+    -pp-dilate
+        Set this for a color texture with an alpha channel to run a
+        preprocess that replaces the RGB components of fully transparent
+        texels with the RGB of the nearest non-transparent texel. Alpha
+        values are untouched. This stops garbage or black colors stored in
+        transparent texels from polluting ASTC endpoint quantization and
+        removes dark or tinted fringes on alpha edges. Pair with -a 1 to
+        encode fully transparent blocks as zero-color constant blocks.
+
     -yflip
         Flip the image in the vertical axis prior to compression and after
         decompression. Note that using this option in test mode (-t*) will
         have no effect because the image will be flipped twice.
+
+    -cleanalpha
+        After decompression, set the RGB components of every fully
+        transparent texel (alpha == 0) to zero. This guarantees that the
+        transparent region of the decoded image contains no color residue.
+        Only affects decompression and test modes.
 
     -j <threads>
         Explicitly specify the number of threads to use in the codec. If

@@ -120,7 +120,9 @@ enum astcenc_preprocess
 	/** @brief Normal vector unit-length normalization. */
 	ASTCENC_PP_NORMALIZE,
 	/** @brief Color data alpha premultiplication. */
-	ASTCENC_PP_PREMULTIPLY
+	ASTCENC_PP_PREMULTIPLY,
+	/** @brief Color dilation into fully transparent texels. */
+	ASTCENC_PP_DILATE
 };
 
 /** @brief Decode table for command line operation modes. */
@@ -853,6 +855,15 @@ static bool init_astcenc_config(
 			}
 			preprocess = ASTCENC_PP_PREMULTIPLY;
 		}
+		else if (!strcmp(argv[argidx], "-pp-dilate"))
+		{
+			if (preprocess != ASTCENC_PP_NONE)
+			{
+				print_error("ERROR: Only a single image preprocess can be used\n");
+				return true;
+			}
+			preprocess = ASTCENC_PP_DILATE;
+		}
 		argidx ++;
 	}
 
@@ -1215,6 +1226,10 @@ static bool edit_astcenc_config(
 		{
 			argidx++;
 		}
+		else if (!strcmp(argv[argidx], "-pp-dilate"))
+		{
+			argidx++;
+		}
 		else if (!strcmp(argv[argidx], "-blockmodelimit"))
 		{
 			bool arg_error = advance_option(argv[argidx], argc, 1, argidx);
@@ -1500,6 +1515,11 @@ static bool edit_astcenc_config(
 		{
 			argidx++;
 			cli_config.y_flip = 1;
+		}
+		else if (!strcmp(argv[argidx], "-cleanalpha"))
+		{
+			argidx++;
+			cli_config.clean_alpha = 1;
 		}
 		else if (!strcmp(argv[argidx], "-mpsnr"))
 		{
@@ -2080,6 +2100,257 @@ static void image_preprocess_premultiply(
 	}
 }
 
+/**
+ * @brief Dilate the RGB color of non-transparent texels into transparent texels.
+ *
+ * Fully transparent texels frequently contain uninitialized or garbage RGB data. ASTC blocks
+ * quantize endpoints across every texel in the block, so transparent texels inside a block pull
+ * the endpoint colors away from the visible texel colors. This shows up as dark or tinted fringes
+ * on alpha edges, and garbage colors surviving the round trip.
+ *
+ * This preprocess replaces the RGB of every fully transparent texel with the RGB of the nearest
+ * non-transparent texel (per-slice 2D flood fill, clamped at the image border). Alpha values are
+ * untouched. The propagated color is only consumed by the encoder's endpoint search; the texels
+ * stay fully transparent so compositing output is unchanged.
+ *
+ * @param[in]  input    The input image.
+ * @param[out] output   The output image, must use F32 components.
+ */
+static void image_preprocess_dilate(
+	const astcenc_image& input,
+	astcenc_image& output
+) {
+	for (size_t z = 0; z < input.dim_z; z++)
+	{
+		size_t width = input.dim_x;
+		size_t height = input.dim_y;
+		size_t count = width * height;
+
+		// Squared distance to the nearest seed texel; INF marks unvisited texels
+		const float inf_dist = static_cast<float>(count + 1);
+		std::vector<float> nearest_dist(count, inf_dist);
+		std::vector<float> nearest_r(count, 0.0f);
+		std::vector<float> nearest_g(count, 0.0f);
+		std::vector<float> nearest_b(count, 0.0f);
+		std::vector<int> nearest_sx(count, 0);
+		std::vector<int> nearest_sy(count, 0);
+
+		for (size_t y = 0; y < height; y++)
+		{
+			for (size_t x = 0; x < width; x++)
+			{
+				size_t i = (y * width) + x;
+				vfloat4 pixel = image_get_pixel(input, x, y, z);
+				if (pixel.lane<3>() > 0.0f)
+				{
+					nearest_dist[i] = 0.0f;
+					nearest_r[i] = pixel.lane<0>();
+					nearest_g[i] = pixel.lane<1>();
+					nearest_b[i] = pixel.lane<2>();
+					nearest_sx[i] = static_cast<int>(x);
+					nearest_sy[i] = static_cast<int>(y);
+				}
+			}
+		}
+
+		// Slices without any non-transparent texel have nothing to propagate; leave the
+		// original colors in place and let the constant-block path encode exact zeros.
+		bool has_seed = false;
+		for (float distance : nearest_dist)
+		{
+			if (distance == 0.0f)
+			{
+				has_seed = true;
+				break;
+			}
+		}
+
+		if (!has_seed)
+		{
+			for (size_t y = 0; y < height; y++)
+			{
+				for (size_t x = 0; x < width; x++)
+				{
+					image_set_pixel(output, x, y, z, image_get_pixel(input, x, y, z));
+				}
+			}
+			continue;
+		}
+
+		// Each texel stores the squared distance to its nearest seed and the seed color.
+		// Two 8-neighbor propagation passes relax every texel against its neighbors; distances
+		// are recomputed from the original seed coordinates rather than accumulated along the
+		// path, so diagonal and axis steps stay geometrically exact without any sqrt calls.
+		auto relax = [&](size_t x, size_t y, size_t ox, size_t oy) {
+			size_t i = (y * width) + x;
+			size_t j = (oy * width) + ox;
+			if (nearest_dist[j] == inf_dist)
+			{
+				return;
+			}
+
+			float dx = static_cast<float>(x) - static_cast<float>(nearest_sx[j]);
+			float dy = static_cast<float>(y) - static_cast<float>(nearest_sy[j]);
+			float candidate = (dx * dx) + (dy * dy);
+			if (candidate < nearest_dist[i])
+			{
+				nearest_dist[i] = candidate;
+				nearest_r[i] = nearest_r[j];
+				nearest_g[i] = nearest_g[j];
+				nearest_b[i] = nearest_b[j];
+				nearest_sx[i] = nearest_sx[j];
+				nearest_sy[i] = nearest_sy[j];
+			}
+		};
+
+		for (size_t y = 0; y < height; y++)
+		{
+			for (size_t x = 0; x < width; x++)
+			{
+				if (x > 0)
+				{
+					relax(x, y, x - 1, y);
+				}
+				if (y > 0)
+				{
+					relax(x, y, x, y - 1);
+					if (x > 0)
+					{
+						relax(x, y, x - 1, y - 1);
+					}
+					if (x + 1 < width)
+					{
+						relax(x, y, x + 1, y - 1);
+					}
+				}
+			}
+		}
+
+		for (size_t y = height; y > 0; y--)
+		{
+			size_t yy = y - 1;
+			for (size_t x = width; x > 0; x--)
+			{
+				size_t xx = x - 1;
+				if (xx + 1 < width)
+				{
+					relax(xx, yy, xx + 1, yy);
+				}
+				if (yy + 1 < height)
+				{
+					relax(xx, yy, xx, yy + 1);
+					if (xx > 0)
+					{
+						relax(xx, yy, xx - 1, yy + 1);
+					}
+					if (xx + 1 < width)
+					{
+						relax(xx, yy, xx + 1, yy + 1);
+					}
+				}
+			}
+		}
+
+		for (size_t y = 0; y < height; y++)
+		{
+			for (size_t x = 0; x < width; x++)
+			{
+				size_t i = (y * width) + x;
+				vfloat4 pixel = image_get_pixel(input, x, y, z);
+
+				// Only fully transparent texels are repainted; partial and opaque texels pass
+				// through unchanged so anti-aliased coverage colors are never modified.
+				if (pixel.lane<3>() == 0.0f)
+				{
+					pixel.set_lane<0>(nearest_r[i]);
+					pixel.set_lane<1>(nearest_g[i]);
+					pixel.set_lane<2>(nearest_b[i]);
+				}
+
+				image_set_pixel(output, x, y, z, pixel);
+			}
+		}
+	}
+}
+
+/**
+ * @brief Zero the RGB components of every fully transparent decoded texel.
+ *
+ * Lossy block compression cannot guarantee a decoded RGB value for texels whose alpha decodes to
+ * zero, because endpoint interpolation is shared across the block. Consumers that read RGB of
+ * fully transparent texels (e.g. straight-alpha blending without premultiplication, mipmap
+ * generation, or pixel diffs) can otherwise pick up black or garbage residue. This pass pins such
+ * texels to (0, 0, 0, 0). Texels with any non-zero alpha are left untouched.
+ *
+ * @param[in,out] image   The decompressed image, modified in place.
+ */
+static void image_clean_transparent_rgb(
+	astcenc_image& image
+) {
+	for (size_t z = 0; z < image.dim_z; z++)
+	{
+		if (image.data_type == ASTCENC_TYPE_U8)
+		{
+			uint8_t* data = static_cast<uint8_t*>(image.data[z]);
+			size_t row_stride = image.row_stride / sizeof(uint8_t);
+			for (size_t y = 0; y < image.dim_y; y++)
+			{
+				uint8_t* row = data + (y * row_stride);
+				for (size_t x = 0; x < image.dim_x; x++)
+				{
+					uint8_t* texel = row + (4 * x);
+					if (texel[3] == 0)
+					{
+						texel[0] = 0;
+						texel[1] = 0;
+						texel[2] = 0;
+					}
+				}
+			}
+		}
+		else if (image.data_type == ASTCENC_TYPE_F16)
+		{
+			uint16_t* data = static_cast<uint16_t*>(image.data[z]);
+			size_t row_stride = image.row_stride / sizeof(uint16_t);
+			for (size_t y = 0; y < image.dim_y; y++)
+			{
+				uint16_t* row = data + (y * row_stride);
+				for (size_t x = 0; x < image.dim_x; x++)
+				{
+					uint16_t* texel = row + (4 * x);
+					// Positive and negative zero share an all-zero mantissa and exponent
+					if ((texel[3] & 0x7FFF) == 0)
+					{
+						texel[0] = 0;
+						texel[1] = 0;
+						texel[2] = 0;
+					}
+				}
+			}
+		}
+		else
+		{
+			assert(image.data_type == ASTCENC_TYPE_F32);
+			float* data = static_cast<float*>(image.data[z]);
+			size_t row_stride = image.row_stride / sizeof(float);
+			for (size_t y = 0; y < image.dim_y; y++)
+			{
+				float* row = data + (y * row_stride);
+				for (size_t x = 0; x < image.dim_x; x++)
+				{
+					float* texel = row + (4 * x);
+					if (texel[3] == 0.0f)
+					{
+						texel[0] = 0.0f;
+						texel[1] = 0.0f;
+						texel[2] = 0.0f;
+					}
+				}
+			}
+		}
+	}
+}
+
 #if defined(ASTCENC_DIAGNOSTICS)
 /**
  * @brief Populate a single diagnostic image showing aspects of the encoding.
@@ -2555,6 +2826,7 @@ int astcenc_main(
 		.array_size = 1,
 		.silentmode = false,
 		.y_flip = false,
+		.clean_alpha = false,
 #if defined(ASTCENC_DIAGNOSTICS)
 		.diagnostic_images = false,
 #endif
@@ -2717,7 +2989,12 @@ int astcenc_main(
 			if (preprocess == ASTCENC_PP_PREMULTIPLY)
 			{
 				image_preprocess_premultiply(*image_uncomp_in, *image_pp,
-				                             config.profile);
+			                             config.profile);
+			}
+
+			if (preprocess == ASTCENC_PP_DILATE)
+			{
+				image_preprocess_dilate(*image_uncomp_in, *image_pp);
 			}
 
 			image_uncomp_in_storage = std::move(image_pp);
@@ -2933,6 +3210,11 @@ int astcenc_main(
 			print_error("ERROR: Codec decompress failed: %s\n",
 			            astcenc_get_error_string(decode_status));
 			return 1;
+		}
+
+		if (cli_config.clean_alpha)
+		{
+			image_clean_transparent_rgb(*image_decomp_out);
 		}
 	}
 

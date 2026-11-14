@@ -1,0 +1,37 @@
+{
+  "encoder": "astcenc v6.0.0 (native, avx512), build sha ada5a34",
+  "settings": {
+    "block": "6x6",
+    "quality": "-medium",
+    "threads": 4,
+    "profile": "-cl LDR linear",
+    "normal_maps": "-normal"
+  },
+  "samples": 500,
+  "aggregate": {
+    "psnr_rgba": {
+      "mean": 243.10092920000002,
+      "min": 15.0927,
+      "finite_min": 15.0927,
+      "p05": 24.1393
+    },
+    "psnr_rgb": {
+      "mean": 242.36678,
+      "min": 13.8433,
+      "finite_min": 13.8433,
+      "p05": 22.89
+    },
+    "ssim_rgba": {
+      "mean": 0.9719099999999999,
+      "min": 0.5654,
+      "finite_min": 0.5654,
+      "p05": 0.7628
+    },
+    "ssim_rgb": {
+      "mean": 0.9637138,
+      "min": 0.4255,
+      "finite_min": 0.4255,
+      "p05": 0.6861
+    }
+  }
+}

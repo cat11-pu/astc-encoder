@@ -1,0 +1,534 @@
+{
+  "sample_count": 500,
+  "classes": {
+    "alpha": 83,
+    "gradient": 83,
+    "hardedge": 84,
+    "noise": 84,
+    "normal": 83,
+    "solid": 83
+  },
+  "crashes_total": 0,
+  "within_run_identical": {
+    "run1": 500,
+    "run2": 500
+  },
+  "cross_run_astc_diffs": 0,
+  "cross_run_metric_diffs": 0,
+  "codec_vs_python_psnr_max_abs_err": 5.071751438379124e-05,
+  "overall": {
+    "psnr_rgba": {
+      "mean": 243.10092920000002,
+      "min": 15.0927,
+      "p01": 15.1383,
+      "p05": 24.1526,
+      "median": 50.7108,
+      "finite_min": 15.0927,
+      "lossless": 104
+    },
+    "psnr_rgb": {
+      "mean": 242.36678,
+      "min": 13.8433,
+      "p01": 13.8889,
+      "p05": 22.9033,
+      "median": 49.4614,
+      "finite_min": 13.8433,
+      "lossless": 104
+    },
+    "ssim_rgba": {
+      "mean": 0.9719099999999999,
+      "min": 0.5654,
+      "p01": 0.7394,
+      "p05": 0.7653,
+      "median": 0.9966,
+      "finite_min": 0.5654,
+      "lossless": 0
+    },
+    "ssim_rgb": {
+      "mean": 0.9637138,
+      "min": 0.4255,
+      "p01": 0.6525,
+      "p05": 0.6891,
+      "median": 0.9955,
+      "finite_min": 0.4255,
+      "lossless": 0
+    },
+    "py_psnr_rgba": {
+      "mean": 55.90092985755014,
+      "min": 15.09269622671808,
+      "p01": 15.138298397855575,
+      "p05": 24.15264478911405,
+      "median": 50.710757243066894,
+      "finite_min": 15.09269622671808,
+      "lossless": 0
+    }
+  },
+  "by_class": {
+    "alpha": {
+      "psnr_rgba": {
+        "mean": 39.405908433734936,
+        "min": 28.6906,
+        "p01": 28.7088,
+        "p05": 29.0464,
+        "median": 41.6603,
+        "finite_min": 28.6906,
+        "lossless": 0
+      },
+      "psnr_rgb": {
+        "mean": 39.69487710843373,
+        "min": 31.6402,
+        "p01": 31.9309,
+        "p05": 32.294,
+        "median": 41.1853,
+        "finite_min": 31.6402,
+        "lossless": 0
+      },
+      "ssim_rgba": {
+        "mean": 0.906844578313253,
+        "min": 0.5654,
+        "p01": 0.6966,
+        "p05": 0.75,
+        "median": 0.9552,
+        "finite_min": 0.5654,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.8828240963855422,
+        "min": 0.4255,
+        "p01": 0.6026,
+        "p05": 0.6708,
+        "median": 0.9552,
+        "finite_min": 0.4255,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 39.40591360458684,
+        "min": 28.690557824128838,
+        "p01": 28.708790500205865,
+        "p05": 29.046372319803133,
+        "median": 41.6602861862231,
+        "finite_min": 28.690557824128838,
+        "lossless": 0
+      }
+    },
+    "gradient": {
+      "psnr_rgba": {
+        "mean": 51.25060722891566,
+        "min": 41.3381,
+        "p01": 42.0283,
+        "p05": 48.0198,
+        "median": 51.2557,
+        "finite_min": 41.3381,
+        "lossless": 0
+      },
+      "psnr_rgb": {
+        "mean": 50.00122048192772,
+        "min": 40.0887,
+        "p01": 40.7789,
+        "p05": 46.7705,
+        "median": 50.0063,
+        "finite_min": 40.0887,
+        "lossless": 0
+      },
+      "ssim_rgba": {
+        "mean": 0.9956542168674699,
+        "min": 0.9924,
+        "p01": 0.9927,
+        "p05": 0.9929,
+        "median": 0.9958,
+        "finite_min": 0.9924,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.9942084337349397,
+        "min": 0.9899,
+        "p01": 0.9902,
+        "p05": 0.9906,
+        "median": 0.9944,
+        "finite_min": 0.9899,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 51.25060704300685,
+        "min": 41.33805101747784,
+        "p01": 42.02827872778287,
+        "p05": 48.01984260765751,
+        "median": 51.25569978698942,
+        "finite_min": 41.33805101747784,
+        "lossless": 0
+      }
+    },
+    "hardedge": {
+      "psnr_rgba": {
+        "mean": 525.4307369047619,
+        "min": 39.9751,
+        "p01": 40.7295,
+        "p05": 42.8209,
+        "median": 999.0,
+        "finite_min": 39.9751,
+        "lossless": 42
+      },
+      "psnr_rgb": {
+        "mean": 524.8060416666666,
+        "min": 38.7257,
+        "p01": 39.4801,
+        "p05": 41.5715,
+        "median": 999.0,
+        "finite_min": 38.7257,
+        "lossless": 42
+      },
+      "ssim_rgba": {
+        "mean": 0.9995130952380953,
+        "min": 0.9964,
+        "p01": 0.9966,
+        "p05": 0.9975,
+        "median": 1.0,
+        "finite_min": 0.9964,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.9993464285714285,
+        "min": 0.9952,
+        "p01": 0.9954,
+        "p05": 0.9966,
+        "median": 1.0,
+        "finite_min": 0.9952,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 75.43073750010124,
+        "min": 39.975072240878546,
+        "p01": 40.7294906884752,
+        "p05": 42.82090738793707,
+        "median": 99.0,
+        "finite_min": 39.975072240878546,
+        "lossless": 0
+      }
+    },
+    "noise": {
+      "psnr_rgba": {
+        "mean": 25.513975,
+        "min": 15.0927,
+        "p01": 15.1189,
+        "p05": 15.1367,
+        "median": 27.1282,
+        "finite_min": 15.0927,
+        "lossless": 0
+      },
+      "psnr_rgb": {
+        "mean": 24.264585714285715,
+        "min": 13.8433,
+        "p01": 13.8695,
+        "p05": 13.8873,
+        "median": 25.8788,
+        "finite_min": 13.8433,
+        "lossless": 0
+      },
+      "ssim_rgba": {
+        "mean": 0.9337142857142857,
+        "min": 0.7375,
+        "p01": 0.7385,
+        "p05": 0.7416,
+        "median": 0.9839,
+        "finite_min": 0.7375,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.9116190476190476,
+        "min": 0.65,
+        "p01": 0.6513,
+        "p05": 0.6555,
+        "median": 0.9786,
+        "finite_min": 0.65,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 25.51397464362612,
+        "min": 15.09269622671808,
+        "p01": 15.118932386729398,
+        "p05": 15.136688786227968,
+        "median": 27.12821749596015,
+        "finite_min": 15.09269622671808,
+        "lossless": 0
+      }
+    },
+    "normal": {
+      "psnr_rgba": {
+        "mean": 57.650467469879516,
+        "min": 40.5397,
+        "p01": 41.9082,
+        "p05": 46.3333,
+        "median": 55.2346,
+        "finite_min": 40.5397,
+        "lossless": 0
+      },
+      "psnr_rgb": {
+        "mean": 56.401074698795185,
+        "min": 39.2903,
+        "p01": 40.6588,
+        "p05": 45.0839,
+        "median": 53.9852,
+        "finite_min": 39.2903,
+        "lossless": 0
+      },
+      "ssim_rgba": {
+        "mean": 0.9969662650602409,
+        "min": 0.9854,
+        "p01": 0.9869,
+        "p05": 0.9926,
+        "median": 0.9975,
+        "finite_min": 0.9854,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.9959542168674698,
+        "min": 0.9805,
+        "p01": 0.9826,
+        "p05": 0.9901,
+        "median": 0.9966,
+        "finite_min": 0.9805,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 57.650466956655386,
+        "min": 40.539660631987566,
+        "p01": 41.90821802975051,
+        "p05": 46.33328899748516,
+        "median": 55.23457208069474,
+        "finite_min": 40.539660631987566,
+        "lossless": 0
+      }
+    },
+    "solid": {
+      "psnr_rgba": {
+        "mean": 758.5738457831326,
+        "min": 45.935,
+        "p01": 46.6401,
+        "p05": 47.4083,
+        "median": 999.0,
+        "finite_min": 45.935,
+        "lossless": 62
+      },
+      "psnr_rgb": {
+        "mean": 758.2577349397591,
+        "min": 44.6856,
+        "p01": 45.3907,
+        "p05": 46.159,
+        "median": 999.0,
+        "finite_min": 44.6856,
+        "lossless": 62
+      },
+      "ssim_rgba": {
+        "mean": 0.9988951807228915,
+        "min": 0.9876,
+        "p01": 0.99,
+        "p05": 0.9936,
+        "median": 1.0,
+        "finite_min": 0.9876,
+        "lossless": 0
+      },
+      "ssim_rgb": {
+        "mean": 0.9985289156626506,
+        "min": 0.9835,
+        "p01": 0.9867,
+        "p05": 0.9914,
+        "median": 1.0,
+        "finite_min": 0.9835,
+        "lossless": 0
+      },
+      "py_psnr_rgba": {
+        "mean": 86.2846884042084,
+        "min": 45.93499472707376,
+        "p01": 46.64005018576689,
+        "p05": 47.408342938393275,
+        "median": 99.0,
+        "finite_min": 45.93499472707376,
+        "lossless": 0
+      }
+    }
+  },
+  "worst_psnr": [
+    {
+      "id": "250",
+      "class": "noise",
+      "file": "noise_000_288x224.png",
+      "size": "288x224",
+      "psnr_rgba": 15.0927,
+      "psnr_rgb": 13.8433,
+      "ssim_rgba": 0.7449,
+      "ssim_rgb": 0.6598
+    },
+    {
+      "id": "321",
+      "class": "noise",
+      "file": "noise_071_400x304.png",
+      "size": "400x304",
+      "psnr_rgba": 15.1189,
+      "psnr_rgb": 13.8695,
+      "ssim_rgba": 0.7416,
+      "ssim_rgb": 0.6555
+    },
+    {
+      "id": "297",
+      "class": "noise",
+      "file": "noise_047_120x88.png",
+      "size": "120x88",
+      "psnr_rgba": 15.1221,
+      "psnr_rgb": 13.8728,
+      "ssim_rgba": 0.7394,
+      "ssim_rgb": 0.6525
+    },
+    {
+      "id": "251",
+      "class": "noise",
+      "file": "noise_001_120x88.png",
+      "size": "120x88",
+      "psnr_rgba": 15.1288,
+      "psnr_rgb": 13.8794,
+      "ssim_rgba": 0.7409,
+      "ssim_rgb": 0.6545
+    },
+    {
+      "id": "281",
+      "class": "noise",
+      "file": "noise_031_160x160.png",
+      "size": "160x160",
+      "psnr_rgba": 15.1367,
+      "psnr_rgb": 13.8873,
+      "ssim_rgba": 0.749,
+      "ssim_rgb": 0.6654
+    },
+    {
+      "id": "330",
+      "class": "noise",
+      "file": "noise_080_160x160.png",
+      "size": "160x160",
+      "psnr_rgba": 15.1383,
+      "psnr_rgb": 13.8889,
+      "ssim_rgba": 0.7484,
+      "ssim_rgb": 0.6645
+    },
+    {
+      "id": "304",
+      "class": "noise",
+      "file": "noise_054_80x80.png",
+      "size": "80x80",
+      "psnr_rgba": 15.1758,
+      "psnr_rgb": 13.9264,
+      "ssim_rgba": 0.7422,
+      "ssim_rgb": 0.6562
+    },
+    {
+      "id": "333",
+      "class": "noise",
+      "file": "noise_083_32x16.png",
+      "size": "32x16",
+      "psnr_rgba": 15.1858,
+      "psnr_rgb": 13.9364,
+      "ssim_rgba": 0.7519,
+      "ssim_rgb": 0.6692
+    },
+    {
+      "id": "323",
+      "class": "noise",
+      "file": "noise_073_72x72.png",
+      "size": "72x72",
+      "psnr_rgba": 15.1931,
+      "psnr_rgb": 13.9437,
+      "ssim_rgba": 0.7385,
+      "ssim_rgb": 0.6513
+    },
+    {
+      "id": "295",
+      "class": "noise",
+      "file": "noise_045_40x24.png",
+      "size": "40x24",
+      "psnr_rgba": 15.2387,
+      "psnr_rgb": 13.9893,
+      "ssim_rgba": 0.7375,
+      "ssim_rgb": 0.65
+    }
+  ],
+  "worst_ssim": [
+    {
+      "id": "378",
+      "class": "alpha",
+      "file": "alpha_044_512x512.png",
+      "size": "512x512",
+      "psnr_rgba": 29.3196,
+      "ssim_rgba": 0.5654
+    },
+    {
+      "id": "338",
+      "class": "alpha",
+      "file": "alpha_004_128x256.png",
+      "size": "128x256",
+      "psnr_rgba": 29.0315,
+      "ssim_rgba": 0.6966
+    },
+    {
+      "id": "295",
+      "class": "noise",
+      "file": "noise_045_40x24.png",
+      "size": "40x24",
+      "psnr_rgba": 15.2387,
+      "ssim_rgba": 0.7375
+    },
+    {
+      "id": "406",
+      "class": "alpha",
+      "file": "alpha_072_32x64.png",
+      "size": "32x64",
+      "psnr_rgba": 30.4344,
+      "ssim_rgba": 0.7375
+    },
+    {
+      "id": "323",
+      "class": "noise",
+      "file": "noise_073_72x72.png",
+      "size": "72x72",
+      "psnr_rgba": 15.1931,
+      "ssim_rgba": 0.7385
+    },
+    {
+      "id": "297",
+      "class": "noise",
+      "file": "noise_047_120x88.png",
+      "size": "120x88",
+      "psnr_rgba": 15.1221,
+      "ssim_rgba": 0.7394
+    },
+    {
+      "id": "251",
+      "class": "noise",
+      "file": "noise_001_120x88.png",
+      "size": "120x88",
+      "psnr_rgba": 15.1288,
+      "ssim_rgba": 0.7409
+    },
+    {
+      "id": "321",
+      "class": "noise",
+      "file": "noise_071_400x304.png",
+      "size": "400x304",
+      "psnr_rgba": 15.1189,
+      "ssim_rgba": 0.7416
+    },
+    {
+      "id": "304",
+      "class": "noise",
+      "file": "noise_054_80x80.png",
+      "size": "80x80",
+      "psnr_rgba": 15.1758,
+      "ssim_rgba": 0.7422
+    },
+    {
+      "id": "250",
+      "class": "noise",
+      "file": "noise_000_288x224.png",
+      "size": "288x224",
+      "psnr_rgba": 15.0927,
+      "ssim_rgba": 0.7449
+    }
+  ]
+}

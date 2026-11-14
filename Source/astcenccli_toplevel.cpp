@@ -738,6 +738,10 @@ static bool init_astcenc_config(
 	float quality = 0.0f;
 	preprocess = ASTCENC_PP_NONE;
 
+	// Quality tier selection; when set the block size argument is ignored
+	bool use_tier = false;
+	astcenc_quality_tier tier = ASTCENC_TIER_MEDIUM;
+
 	// Parse the command line's encoding options
 	int argidx = 4;
 	if (operation & ASTCENC_STAGE_COMPRESS)
@@ -789,6 +793,29 @@ static bool init_astcenc_config(
 		else if (!strcmp(argv[5], "-exhaustive"))
 		{
 			quality = ASTCENC_PRE_EXHAUSTIVE;
+		}
+		else if (!strncmp(argv[5], "-tier:", 6))
+		{
+			const char* tier_name = argv[5] + 6;
+			if (!strcmp(tier_name, "fast"))
+			{
+				tier = ASTCENC_TIER_FAST;
+			}
+			else if (!strcmp(tier_name, "medium"))
+			{
+				tier = ASTCENC_TIER_MEDIUM;
+			}
+			else if (!strcmp(tier_name, "high"))
+			{
+				tier = ASTCENC_TIER_HIGH;
+			}
+			else
+			{
+				print_error("ERROR: Quality tier '%s' is invalid\n", tier_name);
+				return true;
+			}
+
+			use_tier = true;
 		}
 		else
 		{
@@ -871,8 +898,16 @@ static bool init_astcenc_config(
 	}
 #endif
 
-	astcenc_error status = astcenc_config_init(profile, block_x, block_y, block_z,
-	                                           quality, flags, &config);
+	astcenc_error status;
+	if (use_tier)
+	{
+		status = astcenc_tier_config_init(profile, tier, flags, &config);
+	}
+	else
+	{
+		status = astcenc_config_init(profile, block_x, block_y, block_z,
+		                             quality, flags, &config);
+	}
 	if (status == ASTCENC_ERR_BAD_BLOCK_SIZE)
 	{
 		print_error("ERROR: Block size '%ux%ux%u' is invalid\n", block_x, block_y, block_z);

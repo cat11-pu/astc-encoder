@@ -439,6 +439,38 @@ static astcenc_error validate_config(
 }
 
 /* See header for documentation. */
+astcenc_error astcenc_tier_config_init(
+	astcenc_profile profile,
+	astcenc_quality_tier tier,
+	unsigned int flags,
+	astcenc_config* config
+) {
+	unsigned int block_size;
+	float quality;
+
+	switch (tier)
+	{
+	case ASTCENC_TIER_FAST:
+		block_size = 8;
+		quality = ASTCENC_PRE_FAST;
+		break;
+	case ASTCENC_TIER_MEDIUM:
+		block_size = 6;
+		quality = ASTCENC_PRE_MEDIUM;
+		break;
+	case ASTCENC_TIER_HIGH:
+		block_size = 4;
+		quality = ASTCENC_PRE_THOROUGH;
+		break;
+	default:
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	return astcenc_config_init(profile, block_size, block_size, 1,
+	                           quality, flags, config);
+}
+
+/* See header for documentation. */
 astcenc_error astcenc_config_init(
 	astcenc_profile profile,
 	unsigned int block_x,

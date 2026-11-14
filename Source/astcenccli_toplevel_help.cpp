@@ -165,6 +165,19 @@ COMPRESSION
         -verythorough   (quality 99)
         -exhaustive     (quality 100)
 
+    Alternatively, a simplified three-level quality tier can be selected
+    for different loading scenarios. Each tier selects both the block
+    size and the search effort, and the block size argument is ignored:
+
+        -tier:fast      8x8 blocks, fast search; at least 30% faster
+                        than medium, smallest compressed size
+        -tier:medium    6x6 blocks, medium search; balanced default
+        -tier:high      4x4 blocks, thorough search; at least 1 dB
+                        PSNR above medium
+
+    All tiers produce standard ASTC output that any conforming decoder
+    decompresses bit-exactly.
+
     For compression of production content we recommend using the
     -thorough quality level. Higher quality levels are substantially
     slower with only minor improvements to image quality.

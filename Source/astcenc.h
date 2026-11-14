@@ -271,6 +271,39 @@ static const float ASTCENC_PRE_VERYTHOROUGH = 99.0f;
 static const float ASTCENC_PRE_EXHAUSTIVE = 100.0f;
 
 /**
+ * @brief A simplified three-level quality tier selector.
+ *
+ * The quality tiers provide a small stable interface for applications that
+ * want to pick a quality level based on their loading scenario, without
+ * needing to understand block sizes or the full 0-100 quality scale. Each
+ * tier is a curated combination of block size and encoder search effort:
+ *
+ *     - @c ASTCENC_TIER_FAST (8x8 blocks, fast search) targets
+ *       speed-critical loading, such as runtime or just-in-time compression.
+ *       It compresses at least 30% faster than @c ASTCENC_TIER_MEDIUM, and
+ *       produces the smallest compressed images.
+ *     - @c ASTCENC_TIER_MEDIUM (6x6 blocks, medium search) is the balanced
+ *       default for general use.
+ *     - @c ASTCENC_TIER_HIGH (4x4 blocks, thorough search) targets
+ *       quality-critical content, such as offline asset baking. It achieves
+ *       at least 1 dB higher PSNR than @c ASTCENC_TIER_MEDIUM.
+ *
+ * All tiers emit standard ASTC compressed data that can be decompressed by
+ * any conforming ASTC decoder, with bit-exact and therefore pixel-exact
+ * predictable decode results.
+ *
+ * Use @c astcenc_tier_config_init to create a codec config for a tier.
+ */
+enum astcenc_quality_tier {
+	/** @brief The speed-optimized tier (8x8); at least 30% faster than medium. */
+	ASTCENC_TIER_FAST = 0,
+	/** @brief The balanced default tier (6x6). */
+	ASTCENC_TIER_MEDIUM,
+	/** @brief The quality-optimized tier (4x4); at least 1 dB PSNR above medium. */
+	ASTCENC_TIER_HIGH
+};
+
+/**
  * @brief A codec component swizzle selector.
  */
 enum astcenc_swz
@@ -755,6 +788,28 @@ ASTCENC_PUBLIC enum astcenc_error astcenc_config_init(
 	unsigned int block_y,
 	unsigned int block_z,
 	float quality,
+	unsigned int flags,
+	struct astcenc_config* config);
+
+/**
+ * @brief Populate a codec config for a simplified quality tier.
+ *
+ * This is a convenience wrapper around @c astcenc_config_init which selects
+ * the block size and search quality for the requested @c astcenc_quality_tier.
+ * All tiers produce standard ASTC output images that any conforming decoder
+ * will decompress bit-exactly.
+ *
+ * @param      profile  Color profile.
+ * @param      tier     The quality tier to use.
+ * @param      flags    A valid set of @c ASTCENC_FLG_* flag bits.
+ * @param[out] config   Output config struct to populate.
+ *
+ * @return @c ASTCENC_SUCCESS on success, or an error if the inputs are invalid
+ * either individually, or in combination.
+ */
+ASTCENC_PUBLIC enum astcenc_error astcenc_tier_config_init(
+	enum astcenc_profile profile,
+	enum astcenc_quality_tier tier,
 	unsigned int flags,
 	struct astcenc_config* config);
 

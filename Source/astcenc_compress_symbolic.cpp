@@ -26,6 +26,18 @@
 
 #include <cassert>
 
+/** @brief Maximum channel range for a block to use the low-frequency gradient mode. */
+static constexpr float SMOOTH_BLOCK_RANGE = 12800.0f;
+
+/**
+ * @brief Check whether a block has a range consistent with a smooth gradient.
+ */
+static inline bool is_smooth_block(
+	const image_block& blk
+) {
+	return hmax_s(blk.data_max - blk.data_min) < SMOOTH_BLOCK_RANGE;
+}
+
 /**
  * @brief Merge two planes of endpoints into a single vector.
  *
@@ -518,6 +530,7 @@ static float compress_symbolic_block_for_partition_1plane(
 	promise(config.tune_refinement_limit > 0);
 
 	int max_weight_quant = astc::min(static_cast<int>(QUANT_32), quant_limit);
+	bool use_smooth_mode = is_smooth_block(blk);
 
 	auto compute_difference = &compute_symbolic_block_difference_1plane;
 	if ((partition_count == 1) && !(config.flags & ASTCENC_FLG_MAP_RGBM))
@@ -575,7 +588,8 @@ static float compress_symbolic_block_for_partition_1plane(
 
 	// For each mode, use the angular method to compute a shift
 	compute_angular_endpoints_1plane(
-	    only_always, bsd, dec_weights_ideal, max_weight_quant, tmpbuf);
+	    only_always, bsd, dec_weights_ideal, max_weight_quant,
+	    use_smooth_mode, tmpbuf);
 
 	float* weight_low_value = tmpbuf.weight_low_value1;
 	float* weight_high_value = tmpbuf.weight_high_value1;
@@ -602,6 +616,19 @@ static float compress_symbolic_block_for_partition_1plane(
 		{
 			qwt_errors[i] = 1e38f;
 			continue;
+		}
+
+		// The extra low-frequency endpoint mode only helps smooth gradients. Avoid paying for its
+		// weight quantization on high-contrast edge blocks that cannot select it before early-out.
+		if (only_always && !use_smooth_mode)
+		{
+			const auto& smooth_di = bsd.get_decimation_info(bm.decimation_mode);
+			if (!bm.is_dual_plane && (bm.quant_mode == 6) &&
+			    (smooth_di.weight_x == 4) && (smooth_di.weight_y == 3))
+			{
+				qwt_errors[i] = 1e38f;
+				continue;
+			}
 		}
 
 		assert(!bm.is_dual_plane);
@@ -1555,6 +1582,7 @@ void compress_block(
 
 	// Grayscale blocks can only separate alpha, so constant alpha needs no dual-plane search
 	bool block_skip_two_plane = blk.grayscale && blk.is_constant_channel(3);
+	bool block_is_hard_edge = !is_smooth_block(blk);
 	int max_partitions = ctx.config.tune_partition_count_limit;
 
 	unsigned int requested_partition_indices[3] {
@@ -1575,7 +1603,8 @@ void compress_block(
 	float error_threshold = ctx.config.tune_db_limit
 	                      * error_weight_sum
 	                      * block_is_l_scale
-	                      * block_is_la_scale;
+	                      * block_is_la_scale
+	                      * (block_is_hard_edge ? 0.8f : 1.0f);
 
 	lowest_correl = prepare_block_statistics(bsd.texel_count, blk, covariance);
 	trace_add_data("lowest_correl", lowest_correl);
@@ -1619,7 +1648,8 @@ void compress_block(
 	float error_threshold = ctx.config.tune_db_limit
 	                      * error_weight_sum
 	                      * block_is_l_scale
-	                      * block_is_la_scale;
+	                      * block_is_la_scale
+	                      * (block_is_hard_edge ? 0.8f : 1.0f);
 #endif
 
 	// Set SCB and mode errors to a very high error value

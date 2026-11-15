@@ -374,6 +374,7 @@ void compute_angular_endpoints_1plane(
 	const block_size_descriptor& bsd,
 	const float* dec_weight_ideal_value,
 	unsigned int max_weight_quant,
+	bool allow_smooth_mode,
 	compression_working_buffers& tmpbuf
 ) {
 	float (&low_value)[WEIGHTS_MAX_BLOCK_MODES] = tmpbuf.weight_low_value1;
@@ -396,7 +397,8 @@ void compute_angular_endpoints_1plane(
 			continue;
 		}
 
-		unsigned int weight_count = bsd.get_decimation_info(i).weight_count;
+		const decimation_info& di = bsd.get_decimation_info(i);
+		unsigned int weight_count = di.weight_count;
 
 		unsigned int max_precision = dm.maxprec_1plane;
 		if (max_precision > TUNE_MAX_ANGULAR_QUANT)
@@ -425,6 +427,12 @@ void compute_angular_endpoints_1plane(
 
 		unsigned int quant_mode = bm.quant_mode;
 		unsigned int decim_mode = bm.decimation_mode;
+		const decimation_info& di = bsd.get_decimation_info(decim_mode);
+		if (only_always && !allow_smooth_mode && (quant_mode == 6) &&
+		    (di.weight_x == 4) && (di.weight_y == 3))
+		{
+			continue;
+		}
 
 		if (quant_mode <= TUNE_MAX_ANGULAR_QUANT)
 		{

@@ -923,7 +923,9 @@ static void construct_block_size_descriptor_2d(
 	#if !defined(ASTCENC_DECOMPRESS_ONLY)
 			if (j == 0)
 			{
-				percentile_hit = percentiles[i] <= always_cutoff;
+				percentile_hit = percentiles[i] <= always_cutoff ||
+				                 ((mode_cutoff <= 0.8f) && !is_dual_plane &&
+				                  (quant_mode == 6) && (weights_x == 4) && (weights_y == 3));
 			}
 			else
 			{

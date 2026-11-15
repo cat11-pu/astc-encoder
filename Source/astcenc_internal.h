@@ -2137,6 +2137,7 @@ void prepare_angular_tables();
  * @param      bsd                      The block size descriptor for the current trial.
  * @param      dec_weight_ideal_value   The ideal decimated unquantized weight values.
  * @param      max_weight_quant         The maximum block mode weight quantization allowed.
+ * @param      allow_smooth_mode        Allow the low-frequency smooth gradient mode.
  * @param[out] tmpbuf                   Preallocated scratch buffers for the compressor.
  */
 void compute_angular_endpoints_1plane(
@@ -2144,6 +2145,7 @@ void compute_angular_endpoints_1plane(
 	const block_size_descriptor& bsd,
 	const float* dec_weight_ideal_value,
 	unsigned int max_weight_quant,
+	bool allow_smooth_mode,
 	compression_working_buffers& tmpbuf);
 
 /**

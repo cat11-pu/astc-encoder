@@ -23,12 +23,36 @@
 #include <bit>
 #include <cstring>
 #include <new>
+#include <vector>
 
 #include "astcenc.h"
 #include "astcenc_diagnostic_trace.h"
 #include "astcenc_internal_entry.h"
 #include "astcenc_mathlib.h"
 #include "astcenc_preset_configs.h"
+
+/**
+ * @brief Get the byte size of one image component.
+ *
+ * @param data_type   The image data type.
+ *
+ * @return The component size, or zero for an invalid type.
+ */
+static size_t get_component_size(
+	astcenc_type data_type
+) {
+	switch (data_type)
+	{
+	case ASTCENC_TYPE_U8:
+		return sizeof(uint8_t);
+	case ASTCENC_TYPE_F16:
+		return sizeof(uint16_t);
+	case ASTCENC_TYPE_F32:
+		return sizeof(float);
+	default:
+		return 0;
+	}
+}
 
 /**
  * @brief Validate image storage and resolve the default row stride.
@@ -48,19 +72,9 @@ static size_t validate_image(
 		return 0;
 	}
 
-	size_t component_size;
-	switch (image.data_type)
+	size_t component_size = get_component_size(image.data_type);
+	if (component_size == 0)
 	{
-	case ASTCENC_TYPE_U8:
-		component_size = sizeof(uint8_t);
-		break;
-	case ASTCENC_TYPE_F16:
-		component_size = sizeof(uint16_t);
-		break;
-	case ASTCENC_TYPE_F32:
-		component_size = sizeof(float);
-		break;
-	default:
 		return 0;
 	}
 
@@ -858,13 +872,19 @@ void astcenc_context_free(
  * @param         image          The input image.
  * @param         swizzle        The input swizzle.
  * @param[out]    buffer         The output array for the compressed data.
+ * @param         avg_dim_x      The X dimension of the alpha averages buffer.
+ * @param         avg_offset_x   The X offset of the image in the alpha averages buffer.
+ * @param         avg_offset_y   The Y offset of the image in the alpha averages buffer.
  */
 static void compress_image(
 	astcenc_context& ctxo,
 	size_t thread_index,
 	const astcenc_image& image,
 	const astcenc_swizzle& swizzle,
-	uint8_t* buffer
+	uint8_t* buffer,
+	size_t avg_dim_x,
+	size_t avg_offset_x,
+	size_t avg_offset_y
 ) {
 	astcenc_contexti& ctx = ctxo.context;
 	const block_size_descriptor& bsd = *ctx.bsd;
@@ -976,7 +996,9 @@ static void compress_image(
 				{
 					for (size_t ax = start_x; ax < end_x; ax++)
 					{
-						float a_avg = ctx.input_alpha_averages[ay * dim_x + ax];
+						size_t avg_x = avg_offset_x + ax;
+						size_t avg_y = avg_offset_y + ay;
+						float a_avg = ctx.input_alpha_averages[avg_y * avg_dim_x + avg_x];
 						if (a_avg > threshold)
 						{
 							use_full_block = true;
@@ -1111,29 +1133,180 @@ static void compute_averages(
 
 #endif
 
-/* See header for documentation. */
-astcenc_error astcenc_compress_image(
+#if !defined(ASTCENC_DECOMPRESS_ONLY)
+
+/**
+ * @brief Check that a region fits in an image and preserves the complete-image block grid.
+ *
+ * @param image      The complete image.
+ * @param region     The region to validate.
+ * @param block_x    The block X dimension.
+ * @param block_y    The block Y dimension.
+ * @param block_z    The block Z dimension.
+ *
+ * @return @c ASTCENC_SUCCESS if valid, otherwise @c ASTCENC_ERR_BAD_PARAM.
+ */
+static astcenc_error validate_region(
+	const astcenc_image& image,
+	const astcenc_region& region,
+	size_t block_x,
+	size_t block_y,
+	size_t block_z
+) {
+	if ((region.dim_x == 0) || (region.dim_y == 0) || (region.dim_z == 0))
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	if ((region.origin_x % block_x != 0) ||
+	    (region.origin_y % block_y != 0) ||
+	    (region.origin_z % block_z != 0))
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	if ((region.origin_x > image.dim_x) ||
+	    (region.origin_y > image.dim_y) ||
+	    (region.origin_z > image.dim_z))
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	if ((region.dim_x > image.dim_x - region.origin_x) ||
+	    (region.dim_y > image.dim_y - region.origin_y) ||
+	    (region.dim_z > image.dim_z - region.origin_z))
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	size_t end_x = region.origin_x + region.dim_x;
+	size_t end_y = region.origin_y + region.dim_y;
+	size_t end_z = region.origin_z + region.dim_z;
+
+	bool x_is_aligned = (region.dim_x % block_x == 0) || (end_x == image.dim_x);
+	bool y_is_aligned = (region.dim_y % block_y == 0) || (end_y == image.dim_y);
+	bool z_is_aligned = (region.dim_z % block_z == 0) || (end_z == image.dim_z);
+
+	if (!x_is_aligned || !y_is_aligned || !z_is_aligned)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	return ASTCENC_SUCCESS;
+}
+
+/**
+ * @brief Build a non-owning image view for a region.
+ *
+ * @param source          The complete source image.
+ * @param region          The region to view.
+ * @param row_stride      The source row stride, in bytes.
+ * @param component_size  The source component size, in bytes.
+ * @param[out] view       The output image view.
+ * @param[out] slice      Storage for a single-slice view.
+ * @param[out] slices     Storage for a multi-slice view.
+ *
+ * @return @c ASTCENC_SUCCESS if valid, otherwise @c ASTCENC_ERR_BAD_PARAM.
+ */
+static astcenc_error make_region_view(
+	const astcenc_image& source,
+	const astcenc_region& region,
+	size_t row_stride,
+	size_t component_size,
+	astcenc_image& view,
+	void*& slice,
+	std::vector<void*>& slices
+) {
+	bool overflow { false };
+	size_t row_offset = astc::mul_safe(region.origin_y, row_stride, overflow);
+	size_t column_offset = astc::mul_safe(region.origin_x, 4 * component_size, overflow);
+	if (overflow || (row_offset > SIZE_MAX - column_offset))
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	size_t byte_offset = row_offset + column_offset;
+
+	void** slice_data;
+	if (!source.data)
+	{
+		slice_data = nullptr;
+	}
+	else if (region.dim_z == 1)
+	{
+		uint8_t* base = static_cast<uint8_t*>(source.data[region.origin_z]);
+		slice = base ? base + byte_offset : nullptr;
+		slice_data = &slice;
+	}
+	else
+	{
+		try
+		{
+			slices.resize(region.dim_z);
+		}
+		catch (const std::bad_alloc&)
+		{
+			return ASTCENC_ERR_OUT_OF_MEM;
+		}
+
+		for (size_t z = 0; z < region.dim_z; z++)
+		{
+			uint8_t* base = static_cast<uint8_t*>(source.data[region.origin_z + z]);
+			slices[z] = base ? base + byte_offset : nullptr;
+		}
+
+		slice_data = slices.data();
+	}
+
+	view = astcenc_image {
+		.dim_x = region.dim_x,
+		.dim_y = region.dim_y,
+		.dim_z = region.dim_z,
+		.data_type = source.data_type,
+		.data = slice_data,
+		.row_stride = row_stride
+	};
+
+	return ASTCENC_SUCCESS;
+}
+
+/**
+ * @brief Common implementation for complete-image and regional compression.
+ *
+ * @param         ctxo              The compressor context.
+ * @param[in,out] imagep            The input image.
+ * @param         alpha_imagep      Image used for alpha preprocessing, or @c nullptr.
+ * @param         alpha_offset_x    The X offset of @c imagep in @c alpha_imagep.
+ * @param         alpha_offset_y    The Y offset of @c imagep in @c alpha_imagep.
+ * @param         swizzle           The input swizzle.
+ * @param[out]    data_out          The output array for the compressed data.
+ * @param         data_len          The output array length.
+ * @param         thread_index      The thread index.
+ *
+ * @return @c ASTCENC_SUCCESS on success, or an error if compression failed.
+ */
+static astcenc_error compress_image_common(
 	astcenc_context* ctxo,
 	astcenc_image* imagep,
+	const astcenc_image* alpha_imagep,
+	size_t alpha_offset_x,
+	size_t alpha_offset_y,
 	const astcenc_swizzle* swizzle,
 	uint8_t* data_out,
 	size_t data_len,
 	size_t thread_index
 ) {
-#if defined(ASTCENC_DECOMPRESS_ONLY)
-	(void)ctxo;
-	(void)imagep;
-	(void)swizzle;
-	(void)data_out;
-	(void)data_len;
-	(void)thread_index;
-	return ASTCENC_ERR_BAD_CONTEXT;
-#else
+	if (!ctxo || !imagep || !swizzle)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
 	astcenc_contexti* ctx = &ctxo->context;
 	astcenc_error status;
 
 	// Normalize a local descriptor so codec threads do not write to shared caller data
 	astcenc_image image = *imagep;
+	astcenc_image alpha_image = alpha_imagep ? *alpha_imagep : image;
 
 	if (ctx->config.flags & ASTCENC_FLG_DECOMPRESS_ONLY)
 	{
@@ -1163,6 +1336,27 @@ astcenc_error astcenc_compress_image(
 		return ASTCENC_ERR_BAD_PARAM;
 	}
 
+	size_t alpha_texel_count = texel_count;
+	size_t alpha_dim_x = dim_x;
+	if (ctx->config.a_scale_radius != 0)
+	{
+		alpha_texel_count = validate_image(alpha_image, ctx->config.block_z);
+		if (alpha_texel_count == 0)
+		{
+			return ASTCENC_ERR_BAD_PARAM;
+		}
+
+		if ((alpha_image.dim_x < dim_x) ||
+		    (alpha_image.dim_y < dim_y) ||
+		    (alpha_offset_x > alpha_image.dim_x - dim_x) ||
+		    (alpha_offset_y > alpha_image.dim_y - dim_y))
+		{
+			return ASTCENC_ERR_BAD_PARAM;
+		}
+
+		alpha_dim_x = alpha_image.dim_x;
+	}
+
 	size_t block_x = ctx->config.block_x;
 	size_t block_y = ctx->config.block_y;
 	size_t block_z = ctx->config.block_z;
@@ -1185,6 +1379,35 @@ astcenc_error astcenc_compress_image(
 		return ASTCENC_ERR_OUT_OF_MEM;
 	}
 
+	if (!data_out)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	if (!image.data)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	for (size_t z = 0; z < dim_z; z++)
+	{
+		if (!image.data[z])
+		{
+			return ASTCENC_ERR_BAD_PARAM;
+		}
+	}
+
+	if (ctx->config.a_scale_radius != 0)
+	{
+		for (size_t z = 0; z < alpha_image.dim_z; z++)
+		{
+			if (!alpha_image.data[z])
+			{
+				return ASTCENC_ERR_BAD_PARAM;
+			}
+		}
+	}
+
 	// If context thread count is one then implicitly reset
 	if (ctx->thread_count == 1)
 	{
@@ -1194,12 +1417,12 @@ astcenc_error astcenc_compress_image(
 	if (ctx->config.a_scale_radius != 0)
 	{
 		// Initialize shared preprocessing buffers once, in the first thread
-		auto init_avg = [ctx, &image, swizzle, texel_count]() {
+		auto init_avg = [ctx, &alpha_image, swizzle, alpha_texel_count]() {
 			// Perform memory allocations for the destination buffers
-			ctx->input_alpha_averages = new float[texel_count];
+			ctx->input_alpha_averages = new float[alpha_texel_count];
 
 			return init_compute_averages(
-				image, ctx->config.a_scale_radius, *swizzle,
+				alpha_image, ctx->config.a_scale_radius, *swizzle,
 				ctx->avg_preprocess_args);
 		};
 
@@ -1213,7 +1436,8 @@ astcenc_error astcenc_compress_image(
 	// Wait for compute_averages to complete before compressing
 	ctxo->manage_avg.wait();
 
-	compress_image(*ctxo, thread_index, image, *swizzle, data_out);
+	compress_image(*ctxo, thread_index, image, *swizzle, data_out,
+	               alpha_dim_x, alpha_offset_x, alpha_offset_y);
 
 	// Wait for compress to complete before freeing memory
 	ctxo->manage_compress.wait();
@@ -1227,6 +1451,165 @@ astcenc_error astcenc_compress_image(
 	ctxo->manage_compress.term(term_compress);
 
 	return ASTCENC_SUCCESS;
+}
+
+#endif
+
+/* See header for documentation. */
+astcenc_error astcenc_compress_image(
+	astcenc_context* ctxo,
+	astcenc_image* imagep,
+	const astcenc_swizzle* swizzle,
+	uint8_t* data_out,
+	size_t data_len,
+	size_t thread_index
+) {
+#if defined(ASTCENC_DECOMPRESS_ONLY)
+	(void)ctxo;
+	(void)imagep;
+	(void)swizzle;
+	(void)data_out;
+	(void)data_len;
+	(void)thread_index;
+	return ASTCENC_ERR_BAD_CONTEXT;
+#else
+	return compress_image_common(ctxo, imagep, nullptr, 0, 0, swizzle,
+	                             data_out, data_len, thread_index);
+#endif
+}
+
+/* See header for documentation. */
+astcenc_error astcenc_compress_image_region(
+	astcenc_context* ctxo,
+	astcenc_image* imagep,
+	const astcenc_region* region,
+	const astcenc_swizzle* swizzle,
+	uint8_t* data_out,
+	size_t data_len,
+	size_t thread_index
+) {
+#if defined(ASTCENC_DECOMPRESS_ONLY)
+	(void)ctxo;
+	(void)imagep;
+	(void)region;
+	(void)swizzle;
+	(void)data_out;
+	(void)data_len;
+	(void)thread_index;
+	return ASTCENC_ERR_BAD_CONTEXT;
+#else
+	if (!ctxo || !imagep || !region || !swizzle)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	astcenc_contexti* ctx = &ctxo->context;
+	if (ctx->config.flags & ASTCENC_FLG_DECOMPRESS_ONLY)
+	{
+		return ASTCENC_ERR_BAD_CONTEXT;
+	}
+
+	// Resolve the default row stride and validate the complete source storage first
+	astcenc_image source = *imagep;
+	size_t texel_count = validate_image(source, ctx->config.block_z);
+	if (texel_count == 0)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	astcenc_error status = validate_region(
+		source, *region, ctx->config.block_x, ctx->config.block_y, ctx->config.block_z);
+	if (status != ASTCENC_SUCCESS)
+	{
+		return status;
+	}
+
+	size_t component_size = get_component_size(source.data_type);
+	if (component_size == 0)
+	{
+		return ASTCENC_ERR_BAD_PARAM;
+	}
+
+	astcenc_image region_image;
+	void* region_slice = nullptr;
+	std::vector<void*> region_slices;
+	status = make_region_view(
+		source, *region, source.row_stride, component_size,
+		region_image, region_slice, region_slices);
+	if (status != ASTCENC_SUCCESS)
+	{
+		return status;
+	}
+
+	// Alpha preprocessing uses a small margin around the region so neighborhood averages match
+	// the complete-image encoder even when the region does not touch an image boundary.
+	size_t radius = ctx->config.a_scale_radius;
+	if (radius == 0)
+	{
+		return compress_image_common(ctxo, &region_image, &region_image, 0, 0, swizzle,
+		                             data_out, data_len, thread_index);
+	}
+
+	size_t region_end_x = region->origin_x + region->dim_x;
+	size_t region_end_y = region->origin_y + region->dim_y;
+	size_t region_end_z = region->origin_z + region->dim_z;
+
+	size_t alpha_origin_x = region->origin_x > radius ? region->origin_x - radius : 0;
+	size_t alpha_origin_y = region->origin_y > radius ? region->origin_y - radius : 0;
+	size_t alpha_origin_z = region->origin_z > radius ? region->origin_z - radius : 0;
+
+	size_t alpha_end_x = region_end_x;
+	size_t alpha_end_y = region_end_y;
+	size_t alpha_end_z = region_end_z;
+	if (radius <= source.dim_x - alpha_end_x)
+	{
+		alpha_end_x += radius;
+	}
+	else
+	{
+		alpha_end_x = source.dim_x;
+	}
+	if (radius <= source.dim_y - alpha_end_y)
+	{
+		alpha_end_y += radius;
+	}
+	else
+	{
+		alpha_end_y = source.dim_y;
+	}
+	if (radius <= source.dim_z - alpha_end_z)
+	{
+		alpha_end_z += radius;
+	}
+	else
+	{
+		alpha_end_z = source.dim_z;
+	}
+
+	astcenc_region alpha_region {
+		.origin_x = alpha_origin_x,
+		.origin_y = alpha_origin_y,
+		.origin_z = alpha_origin_z,
+		.dim_x = alpha_end_x - alpha_origin_x,
+		.dim_y = alpha_end_y - alpha_origin_y,
+		.dim_z = alpha_end_z - alpha_origin_z
+	};
+
+	astcenc_image alpha_image;
+	void* alpha_slice = nullptr;
+	std::vector<void*> alpha_slices;
+	status = make_region_view(
+		source, alpha_region, source.row_stride, component_size,
+		alpha_image, alpha_slice, alpha_slices);
+	if (status != ASTCENC_SUCCESS)
+	{
+		return status;
+	}
+
+	return compress_image_common(ctxo, &region_image, &alpha_image,
+	                             region->origin_x - alpha_origin_x,
+	                             region->origin_y - alpha_origin_y,
+	                             swizzle, data_out, data_len, thread_index);
 #endif
 }
 

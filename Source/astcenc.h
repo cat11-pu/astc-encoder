@@ -656,6 +656,38 @@ struct astcenc_image
 };
 
 /**
+ * @brief A rectangular region of an image.
+ *
+ * The origin is in texels relative to the image passed to the region compression entry point.
+ * The region dimensions must be positive and the complete region must fit inside the image.
+ *
+ * Region compression preserves the block grid of the complete image. The origin must therefore
+ * be aligned to the configured block dimensions. A region span that does not end on a block
+ * boundary is only valid when it reaches the corresponding image boundary, where the complete
+ * image encoder would also clamp to the edge.
+ */
+struct astcenc_region
+{
+	/** @brief The X origin of the region, in texels. */
+	size_t origin_x;
+
+	/** @brief The Y origin of the region, in texels. */
+	size_t origin_y;
+
+	/** @brief The Z origin of the region, in texels. */
+	size_t origin_z;
+
+	/** @brief The X dimension of the region, in texels. */
+	size_t dim_x;
+
+	/** @brief The Y dimension of the region, in texels. */
+	size_t dim_y;
+
+	/** @brief The Z dimension of the region, in texels. */
+	size_t dim_z;
+};
+
+/**
  * @brief A block encoding metadata query result.
  *
  * If the block is an error block or a constant color block or an error block all fields other than
@@ -812,6 +844,41 @@ ASTCENC_PUBLIC enum astcenc_error astcenc_context_alloc(
 ASTCENC_PUBLIC enum astcenc_error astcenc_compress_image(
 	struct astcenc_context* context,
 	struct astcenc_image* image,
+	const struct astcenc_swizzle* swizzle,
+	uint8_t* data_out,
+	size_t data_len,
+	size_t thread_index);
+
+/**
+ * @brief Compress a rectangular region of an image.
+ *
+ * This encodes only the blocks covering @c region, using the block grid of the complete image.
+ * The output is a standalone sequence of 16-byte ASTC blocks in X-major, then Y-major, then
+ * Z-major order. Its decoded dimensions are the region dimensions, so partial blocks on the image
+ * right, bottom, or back edges decode correctly.
+ *
+ * For a block-aligned region the compressed bytes are identical to the corresponding block range
+ * from @c astcenc_compress_image() on the complete image. Non-aligned origins are rejected, as are
+ * interior spans that do not contain a whole number of blocks. A span may end partway through a
+ * block only when it reaches the corresponding image boundary.
+ *
+ * The context and image requirements are the same as @c astcenc_compress_image(). All threads for
+ * a multi-threaded context must pass the same image, region, swizzle, and output buffer.
+ *
+ * @param         context        Codec context.
+ * @param[in,out] image          The complete input image, in 2D slices.
+ * @param         region         The region to compress.
+ * @param         swizzle        Compression data swizzle, applied before compression.
+ * @param[out]    data_out       Pointer to output data array.
+ * @param         data_len       Length of the output data array.
+ * @param         thread_index   Thread index [0..N-1] of calling thread.
+ *
+ * @return @c ASTCENC_SUCCESS on success, or an error if compression failed.
+ */
+ASTCENC_PUBLIC enum astcenc_error astcenc_compress_image_region(
+	struct astcenc_context* context,
+	struct astcenc_image* image,
+	const struct astcenc_region* region,
 	const struct astcenc_swizzle* swizzle,
 	uint8_t* data_out,
 	size_t data_len,

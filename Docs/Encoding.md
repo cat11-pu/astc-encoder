@@ -255,7 +255,47 @@ original input image. Crop coordinates refer to the original input, before
 Callers of the library API select an XY region of each plane by offsetting each
 `astcenc_image::data` slice pointer to the desired origin texel, setting the
 image dimensions to the region size, and setting `row_stride` to the original
-image row size in bytes. Z region selection is handled by the caller, passing only the active planes to the API.
+image row size in bytes. Z region selection is handled by the caller, passing
+only the active planes to the API.
+
+For a batch of block-aligned regions, use `astcenc_compress_image_region()` and
+pass the complete image with an `astcenc_region` descriptor:
+
+```cpp
+astcenc_region region {
+    .origin_x = 64,
+    .origin_y = 32,
+    .origin_z = 0,
+    .dim_x = 256,
+    .dim_y = 128,
+    .dim_z = 1
+};
+
+size_t blocks_x = (region.dim_x + block_x - 1) / block_x;
+size_t blocks_y = (region.dim_y + block_y - 1) / block_y;
+size_t blocks_z = (region.dim_z + block_z - 1) / block_z;
+size_t data_len = blocks_x * blocks_y * blocks_z * 16;
+
+astcenc_compress_image_region(
+    context, &image, &region, &swizzle,
+    compressed_data, data_len, 0);
+```
+
+The region origin must be aligned to the configured block dimensions so that
+the result uses the same block grid as a complete-image encode. Interior region
+spans must contain a whole number of blocks. A span may end partway through a
+block only when it reaches the right, bottom, or back edge of the complete
+image.
+
+The output is a standalone raw ASTC block stream with no header, laid out in
+X-major, then Y-major, then Z-major order. Decode it using the region
+dimensions. For valid regions every 16-byte block is identical to the
+corresponding block from `astcenc_compress_image()` on the complete image,
+including alpha-scale preprocessing at region boundaries.
+
+Reuse one context for a batch and call `astcenc_compress_reset()` between
+multi-threaded regions. Single-threaded contexts reset implicitly. The region
+path does not retain per-call allocations after the call returns.
 
 - - -
 

@@ -61,6 +61,49 @@ foreach(INDEX RANGE ${ASTCENC_ARTIFACTS_LEN})
         endif()
 
         include(cmake_core.cmake)
+
+        if(${ASTCENC_PROPERTY_TEST})
+            add_executable(${ASTCENC_TARGET}-property-test
+                ../Test/astc_property_test.cpp)
+
+            target_link_libraries(${ASTCENC_TARGET}-property-test
+                PRIVATE
+                    ${ASTCENC_TARGET}-static)
+
+            target_compile_features(${ASTCENC_TARGET}-property-test
+                PRIVATE
+                    cxx_std_20)
+
+            target_compile_options(${ASTCENC_TARGET}-property-test
+                PRIVATE
+                    $<$<PLATFORM_ID:Linux,Darwin>:-pthread>)
+
+            target_link_options(${ASTCENC_TARGET}-property-test
+                PRIVATE
+                    $<$<PLATFORM_ID:Linux,Darwin>:-pthread>)
+
+            if(${ASTCENC_ASAN})
+                target_compile_options(${ASTCENC_TARGET}-property-test
+                    PRIVATE
+                        $<${is_gnu_fe}:-fsanitize=address>
+                        $<${is_gnu_fe}:-fno-sanitize-recover=all>)
+
+                target_link_options(${ASTCENC_TARGET}-property-test
+                    PRIVATE
+                        $<${is_gnu_fe}:-fsanitize=address>)
+            endif()
+
+            if(${ASTCENC_UBSAN})
+                target_compile_options(${ASTCENC_TARGET}-property-test
+                    PRIVATE
+                        $<${is_gnu_fe}:-fsanitize=undefined>
+                        $<${is_gnu_fe}:-fno-sanitize-recover=all>)
+
+                target_link_options(${ASTCENC_TARGET}-property-test
+                    PRIVATE
+                        $<${is_gnu_fe}:-fsanitize=undefined>)
+            endif()
+        endif()
     endif()
 endforeach()
 

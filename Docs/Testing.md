@@ -213,6 +213,54 @@ exchanges affect later choices, so a seed does not reproduce an exact run.
 The executable returns nonzero on failure and is kept separate from the CTest
 unit suite.
 
+# Running the codec property test
+
+The property test builds a standalone executable when
+`-DASTCENC_PROPERTY_TEST=ON` is configured. It has two modes:
+
+* `--illegal` runs 200 deterministic negative cases, split into four groups of
+  50: sign-extended negative image dimensions, invalid block geometry and
+  derived block coordinates, oversized quality and tuning parameters, and
+  duplicated ASTC headers alternating with payload blocks. Every case must
+  return an error without corrupting guard buffers.
+* `--emit-reference` and `--verify-reference` implement 50 legal
+  image/settings pairs. The reference build writes `.astc` files, and the
+  instrumented build re-encodes each image and compares every 16-byte block.
+
+Build an unsanitized reference and an ASAN/UBSAN build:
+
+```sh
+cmake -S . -B build-ref -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DASTCENC_ISA_NONE=ON -DASTCENC_PROPERTY_TEST=ON
+cmake --build build-ref -j
+
+cmake -S . -B build-san -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DASTCENC_ISA_NONE=ON -DASTCENC_PROPERTY_TEST=ON \
+    -DASTCENC_ASAN=ON -DASTCENC_UBSAN=ON
+cmake --build build-san -j
+```
+
+Generate the reference corpus, then run the illegal corpus and legal block
+comparison with leak detection enabled:
+
+```sh
+./build-ref/Source/astcenc-none-property-test \
+    --emit-reference build-ref/property-reference
+
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+    ./build-san/Source/astcenc-none-property-test --illegal
+
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+    ./build-san/Source/astcenc-none-property-test \
+    --verify-reference build-ref/property-reference
+```
+
+Both modes emit one `CASE` line per test and a final `SUMMARY` line. Failures
+also print the offending dimensions, block size, quality, flags, and, for a
+block mismatch, the expected and actual 16-byte block hex values.
+
 ASAN, TSAN, and UBSAN can be enabled using the options below. For a ThreadSanitizer
 build with Clang or GCC on Linux, configure a separate build directory:
 
